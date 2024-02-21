@@ -2,7 +2,7 @@
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const rays = [];
-let isMouseDown = false;
+let isPaused = false;
 
 // Antenna config
 const antenna = {
@@ -13,12 +13,26 @@ const antenna = {
 
 // Event listeners
 canvas.addEventListener('mousedown', (event) => {
-  isMouseDown = true;
-  const { offsetX, offsetY } = event;
-  shootRays(offsetX, offsetY);
+  if (!isPaused) {
+    const { offsetX, offsetY } = event;
+    shootRays(offsetX, offsetY);
+  }
 });
-canvas.addEventListener('mouseup', (event) => {
-  isMouseDown = false;
+document.getElementById('pauseButton').addEventListener('click', (e) => {
+  isPaused = !isPaused;
+  if (!isPaused) {
+    animate();
+    e.currentTarget.textContent = 'Pause';
+  }
+  else {
+    e.currentTarget.textContent = 'Resume';     
+  }
+});
+document.getElementById('resetButton').addEventListener('click', () => {
+  rays.length = 0;
+  isPaused = false;
+  document.getElementById('pauseButton').textContent = 'Pause';
+  animate();
 });
 
 // Helpers
@@ -134,9 +148,11 @@ function draw() {
 
 // Animation loop
 function animate() {
-  requestAnimationFrame(animate);
-  updateRays();
-  draw();
+  if (!isPaused) { 
+    requestAnimationFrame(animate);
+    updateRays();
+    draw();
+  }
 }
 
 animate();
