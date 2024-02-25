@@ -105,8 +105,8 @@ function draw() {
   ctx.strokeStyle = 'red';
   obstacles.forEach((obstacle) => {
     ctx.beginPath();
-    ctx.moveTo(obstacle.x1, obstacle.y1);
-    ctx.lineTo(obstacle.x2, obstacle.y2);
+    ctx.moveTo(obstacle.p1.x, obstacle.p1.y);
+    ctx.lineTo(obstacle.p2.x, obstacle.p2.y);
     ctx.stroke();
   });
 
