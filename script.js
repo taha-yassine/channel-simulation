@@ -1,8 +1,16 @@
+import { distanceBetween, getReflection, argmin } from './utils.js';
+
 // Init
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const rays = [];
 let isPaused = false;
+const obstacles = [
+  { p1: { x: 0, y: 0 }, p2: { x: canvas.width, y: 0 } },
+  { p1: { x: 0, y: 0 }, p2: { x: 0, y: canvas.height } },
+  { p1: { x: canvas.width, y: 0 }, p2: { x: canvas.width, y: canvas.height } },
+  { p1: { x: 0, y: canvas.height }, p2: { x: canvas.width, y: canvas.height } }
+];
 
 // Antenna config
 const antenna = {
@@ -35,88 +43,52 @@ document.getElementById('resetButton').addEventListener('click', () => {
   animate();
 });
 
-// Helpers
-function distanceBetween(point1, point2) {
-  const dx = point1.x - point2.x;
-  const dy = point1.y - point2.y;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-function angleBetween(point1, point2) {
-  const dx = point2.x - point1.x;
-  const dy = point2.y - point1.y;
-  return Math.atan2(dy, dx);
-}
-
-
 
 // Function to shoot rays in all directions from the clicked point
 function shootRays(originX, originY) {
   rays.length = 0; // Clear previous rays
-  for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 180) {
+  for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 8) {
+    const direction = { x: Math.cos(angle), y: Math.sin(angle) }; // Translate angle to unit direction vector
     const ray = {
-      headAngle: angle,
-      tailAngle: angle,
-      trail: [{ x: originX, y: originY }, { x: originX, y: originY }],
+      path: [{ x: originX, y: originY }],
       speed: 2,
       reachedAntenna: false,
-      maxLength: 300,
+      maxBounces: 3,
       reachedMaxLength: false,
     };
+    tracePath(ray.path, direction, obstacles, ray.maxBounces);
     rays.push(ray);
   }
 }
 
-// Function to update rays' positions and handle reflections
-function updateRays() {
-  rays.forEach((ray) => {
-    if (!ray.reachedAntenna) {
-      // Get the head point in the trail
-      const headPoint = ray.trail[ray.trail.length - 1];
-      const newX = headPoint.x + Math.cos(ray.headAngle) * ray.speed;
-      const newY = headPoint.y + Math.sin(ray.headAngle) * ray.speed;
-
-      // Check for canvas border collisions
-      if (newX <= 0 || newX >= canvas.width || newY <= 0 || newY >= canvas.height) {
-        // Calculate the reflection angle
-        if (newX <= 0 || newX >= canvas.width) {
-          ray.headAngle = Math.PI - ray.headAngle; // Reflect off left/right walls
-        }
-        if (newY <= 0 || newY >= canvas.height) {
-          ray.headAngle = -ray.headAngle; // Reflect off top/bottom walls
-        }
-        // Add a new head point to the trail after reflection
-        ray.trail.push({ x: headPoint.x, y: headPoint.y });
-      } else {
-        // No collision, just move the head point of the trail
-        ray.trail[ray.trail.length - 1] = { x: newX, y: newY };
+// Recursive function to do the ray tracing
+// TODO: Handle corners
+function tracePath(path, direction, obstacles, bounces) {
+  bounces--;
+  if (bounces >= -1) {
+    let intersections = [];
+    let refDirs = [];
+    const raySegment = {
+      p1:{
+        // Slightly offset the ray to avoid self-intersections
+        x:path[path.length - 1].x+direction.x*.01,
+        y:path[path.length - 1].y+direction.y*.01,
+      },
+      p2:{
+        x:path[path.length - 1].x+direction.x*1000,
+        y:path[path.length - 1].y+direction.y*1000,
       }
-
-      // Calculate the total length of the trail
-      if (!ray.reachedMaxLength) {
-        let totalLength = 0;
-        for (let i = ray.trail.length - 1; i > 0; i--) {
-          totalLength += distanceBetween(ray.trail[i], ray.trail[i - 1]);
-        }
-        ray.reachedMaxLength = totalLength > ray.maxLength;
-
-      } else {
-        // Move the tail point in the tail direction  
-        const newTail = {
-          x: ray.trail[0].x + Math.cos(ray.tailAngle) * ray.speed,
-          y: ray.trail[0].y + Math.sin(ray.tailAngle) * ray.speed
-        };
-        ray.trail[0] = newTail;
-
-        // If the tail reaches a bounce point, update it
-        if (distanceBetween(ray.trail[0], ray.trail[1]) < 0.1) {
-          ray.trail.shift();
-          ray.tailAngle = angleBetween(ray.trail[0], ray.trail[1]);
-        }
-      }
-
-    }
-  });
+    };
+    obstacles.forEach((obstacle) => {
+      const [i, refDir] = getReflection(raySegment, obstacle);
+      intersections.push(i);
+      refDirs.push(refDir);
+    });
+    const idMin = argmin(intersections.map(i => distanceBetween(i, raySegment.p1) ?? Infinity));
+    path.push(intersections[idMin]);
+    tracePath(path, refDirs[idMin], obstacles, bounces);
+  }
+}
 }
 
 // Function to draw rays and antenna on the canvas
@@ -129,12 +101,21 @@ function draw() {
   ctx.arc(antenna.x, antenna.y, antenna.radius, 0, 2 * Math.PI);
   ctx.fill();
 
+  // Draw obstacles
+  ctx.strokeStyle = 'red';
+  obstacles.forEach((obstacle) => {
+    ctx.beginPath();
+    ctx.moveTo(obstacle.x1, obstacle.y1);
+    ctx.lineTo(obstacle.x2, obstacle.y2);
+    ctx.stroke();
+  });
+
   // Draw rays
   ctx.strokeStyle = 'black';
   rays.forEach((ray) => {
     if (!ray.reachedAntenna) {
       ctx.beginPath();
-      ray.trail.forEach((point, index) => {
+      ray.path.forEach((point, index) => {
         if (index === 0) {
           ctx.moveTo(point.x, point.y);
         } else {
@@ -150,7 +131,6 @@ function draw() {
 function animate() {
   if (!isPaused) { 
     requestAnimationFrame(animate);
-    updateRays();
     draw();
   }
 }
