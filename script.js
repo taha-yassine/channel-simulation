@@ -1,4 +1,5 @@
-import { distanceBetween, getReflection, argmin } from './utils.js';
+import { getReflection, argmin } from './utils.js';
+import { Vector } from './vector.js';
 
 // Init
 const canvas = document.getElementById('canvas');
@@ -6,17 +7,16 @@ const ctx = canvas.getContext('2d');
 const rays = [];
 let isPaused = false;
 const obstacles = [
-  { p1: { x: 0, y: 0 }, p2: { x: canvas.width, y: 0 } },
-  { p1: { x: 0, y: 0 }, p2: { x: 0, y: canvas.height } },
-  { p1: { x: canvas.width, y: 0 }, p2: { x: canvas.width, y: canvas.height } },
-  { p1: { x: 0, y: canvas.height }, p2: { x: canvas.width, y: canvas.height } }
+  { p1: new Vector(0, 0), p2: new Vector(canvas.width, 0) },
+  { p1: new Vector(0, 0), p2: new Vector(0, canvas.height) },
+  { p1: new Vector(canvas.width, 0), p2: new Vector(canvas.width, canvas.height) },
+  { p1: new Vector(0, canvas.height), p2: new Vector(canvas.width, canvas.height) },
 ];
 
 // Antenna config
 const antenna = {
-  x: canvas.width - 50, // Example position, adjust as needed
-  y: canvas.height / 2,
-  radius: 10 // Example size, adjust as needed
+  p: new Vector(canvas.width - 50, canvas.height / 2),
+  radius: 10
 };
 
 // Event listeners
@@ -48,9 +48,9 @@ document.getElementById('resetButton').addEventListener('click', () => {
 function shootRays(originX, originY) {
   rays.length = 0; // Clear previous rays
   for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 8) {
-    const direction = { x: Math.cos(angle), y: Math.sin(angle) }; // Translate angle to unit direction vector
+    const direction = new Vector(Math.cos(angle), Math.sin(angle)); // Translate angle to unit direction vector
     const ray = {
-      path: [{ x: originX, y: originY }],
+      path: [new Vector(originX, originY)],
       speed: 2,
       reachedAntenna: false,
       maxBounces: 3,
@@ -69,26 +69,18 @@ function tracePath(path, direction, obstacles, bounces) {
     let intersections = [];
     let refDirs = [];
     const raySegment = {
-      p1:{
-        // Slightly offset the ray to avoid self-intersections
-        x:path[path.length - 1].x+direction.x*.01,
-        y:path[path.length - 1].y+direction.y*.01,
-      },
-      p2:{
-        x:path[path.length - 1].x+direction.x*1000,
-        y:path[path.length - 1].y+direction.y*1000,
-      }
+      p1: path[path.length - 1].add(direction.multiply(.01)), // Slightly offset the ray to avoid self-intersections
+      p2: path[path.length - 1].add(direction.multiply(1000))
     };
     obstacles.forEach((obstacle) => {
       const [i, refDir] = getReflection(raySegment, obstacle);
       intersections.push(i);
       refDirs.push(refDir);
     });
-    const idMin = argmin(intersections.map(i => distanceBetween(i, raySegment.p1) ?? Infinity));
+    const idMin = argmin(intersections.map(i => i!=null ? Vector.distanceBetween(i, raySegment.p1) : Infinity));
     path.push(intersections[idMin]);
     tracePath(path, refDirs[idMin], obstacles, bounces);
   }
-}
 }
 
 // Function to draw rays and antenna on the canvas
@@ -98,7 +90,7 @@ function draw() {
   // Draw antenna
   ctx.fillStyle = 'black';
   ctx.beginPath();
-  ctx.arc(antenna.x, antenna.y, antenna.radius, 0, 2 * Math.PI);
+  ctx.arc(antenna.p.x, antenna.p.y, antenna.radius, 0, 2 * Math.PI);
   ctx.fill();
 
   // Draw obstacles
