@@ -11,6 +11,7 @@ const obstacles = [
   { p1: new Vector(0, 0), p2: new Vector(0, canvas.height) },
   { p1: new Vector(canvas.width, 0), p2: new Vector(canvas.width, canvas.height) },
   { p1: new Vector(0, canvas.height), p2: new Vector(canvas.width, canvas.height) },
+  { p1: new Vector(100, 400), p2: new Vector(200, 100) }
 ];
 
 // Antenna config
