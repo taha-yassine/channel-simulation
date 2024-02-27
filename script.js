@@ -153,6 +153,14 @@ function rayletToPath(raylet, length=10) {
 // Function to draw rays and antenna on the canvas
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw rays
+  ctx.strokeStyle = 'lightgray';
+  rays.forEach((ray) => {
+    if (!ray.reachedAntenna) {
+      drawPath(ray.path);
+    }
+  });
   
   // Draw antenna
   ctx.fillStyle = 'black';
@@ -167,14 +175,6 @@ function draw() {
     ctx.moveTo(obstacle.p1.x, obstacle.p1.y);
     ctx.lineTo(obstacle.p2.x, obstacle.p2.y);
     ctx.stroke();
-  });
-
-  // Draw rays
-  ctx.strokeStyle = 'lightgray';
-  rays.forEach((ray) => {
-    if (!ray.reachedAntenna) {
-      drawPath(ray.path);
-    }
   });
 
   // Draw raylets
