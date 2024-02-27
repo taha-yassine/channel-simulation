@@ -1,13 +1,18 @@
 import { getReflection, argmin } from './utils.js';
 import { Vector } from './vector.js';
 
+// Components
+const speedSlider = document.getElementById('speed');
+const bouncesSlider = document.getElementById('bounces');
+const timeSlider = document.getElementById('time');
+
 // Init
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const rays = [];
 const raylets = [];
-let time = 0;
 let isPaused = false;
+let currentOrigin;
 const obstacles = [
   { p1: new Vector(0, 0), p2: new Vector(canvas.width, 0) },
   { p1: new Vector(0, 0), p2: new Vector(0, canvas.height) },
@@ -27,12 +32,12 @@ canvas.addEventListener('mousedown', (event) => {
   if (!isPaused) {
     const { offsetX, offsetY } = event;
     shootRays(offsetX, offsetY);
+    timeSlider.value = 0;
   }
 });
 document.getElementById('pauseButton').addEventListener('click', (e) => {
   isPaused = !isPaused;
   if (!isPaused) {
-    animate();
     e.currentTarget.textContent = 'Pause';
   }
   else {
@@ -41,16 +46,23 @@ document.getElementById('pauseButton').addEventListener('click', (e) => {
 });
 document.getElementById('resetButton').addEventListener('click', () => {
   rays.length = 0;
-  time = 0;
+  raylets.length = 0;
+  timeSlider.value = 0;
   isPaused = false;
   document.getElementById('pauseButton').textContent = 'Pause';
-  animate();
 });
-
+bouncesSlider.addEventListener('input', () => {
+  if(currentOrigin) {
+    shootRays(currentOrigin.x, currentOrigin.y);
+  }
+});
 
 // Function to shoot rays in all directions from the clicked point
 function shootRays(originX, originY) {
-  time = 0;
+  // Register origin
+  currentOrigin = new Vector(originX, originY);
+
+  timeSlider.value = 0;
 
   // Clear previous rays
   rays.length = 0;
@@ -60,9 +72,8 @@ function shootRays(originX, originY) {
     const direction = new Vector(Math.cos(angle), Math.sin(angle)); // Translate angle to unit direction vector
     const ray = {
       path: [new Vector(originX, originY)],
-      speed: 10,
       reachedAntenna: false,
-      maxBounces: 2,
+      maxBounces: bouncesSlider.value,
       reachedMaxLength: false,
     };
     tracePath(ray.path, direction, obstacles, ray.maxBounces);
@@ -100,7 +111,7 @@ function tracePath(path, direction, obstacles, bounces) {
 
 function updateRaylets() {
   raylets.forEach((raylet) => {
-    raylet.head = raylet.ray.speed*time;
+    raylet.head = speedSlider.value*timeSlider.value;
   });
 }
 
@@ -186,11 +197,11 @@ function draw() {
 
 // Animation loop
 function animate() {
+  requestAnimationFrame(animate);
   if (!isPaused) {
-    requestAnimationFrame(animate);
     updateRaylets();
     draw();
-    time++;
+    timeSlider.value++;
   }
 }
 
