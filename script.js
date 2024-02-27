@@ -5,6 +5,8 @@ import { Vector } from './vector.js';
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const rays = [];
+const raylets = [];
+let time = 0;
 let isPaused = false;
 const obstacles = [
   { p1: new Vector(0, 0), p2: new Vector(canvas.width, 0) },
@@ -39,6 +41,7 @@ document.getElementById('pauseButton').addEventListener('click', (e) => {
 });
 document.getElementById('resetButton').addEventListener('click', () => {
   rays.length = 0;
+  time = 0;
   isPaused = false;
   document.getElementById('pauseButton').textContent = 'Pause';
   animate();
@@ -47,18 +50,29 @@ document.getElementById('resetButton').addEventListener('click', () => {
 
 // Function to shoot rays in all directions from the clicked point
 function shootRays(originX, originY) {
-  rays.length = 0; // Clear previous rays
-  for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 8) {
+  time = 0;
+
+  // Clear previous rays
+  rays.length = 0;
+  raylets.length = 0;
+
+  for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 90) {
     const direction = new Vector(Math.cos(angle), Math.sin(angle)); // Translate angle to unit direction vector
     const ray = {
       path: [new Vector(originX, originY)],
-      speed: 2,
+      speed: 10,
       reachedAntenna: false,
-      maxBounces: 3,
+      maxBounces: 2,
       reachedMaxLength: false,
     };
     tracePath(ray.path, direction, obstacles, ray.maxBounces);
     rays.push(ray);
+
+    // Initialize a raylet for each ray
+    raylets.push({
+      head : 0, // Head of the raylet as the absolute distance from the origin of the ray
+      ray: ray, // Corresponding ray
+    });
   }
 }
 
@@ -84,6 +98,58 @@ function tracePath(path, direction, obstacles, bounces) {
   }
 }
 
+function updateRaylets() {
+  raylets.forEach((raylet) => {
+    raylet.head = raylet.ray.speed*time;
+  });
+}
+
+function drawPath(path) {
+  ctx.beginPath();
+  path.forEach((point, index) => {
+    if (index === 0) {
+      ctx.moveTo(point.x, point.y);
+    } else {
+      ctx.lineTo(point.x, point.y);
+    }
+  });
+  ctx.stroke();
+}
+
+// Function to draw raylet
+function rayletToPath(raylet, length=10) {
+  // Cumulative length of the path segments
+  const cumLength = raylet.ray.path.map((acc => (p,i) => acc += Vector.distanceBetween(raylet.ray.path[Math.max(i-1,0)],p))(0));
+  
+  let head = Math.min(cumLength[cumLength.length-1], raylet.head); // Bound the head
+  let tail = Math.max(head - length,0);
+  let start = 0;
+  let end = 0;
+
+  // Find the path nodes included in the raylet
+  for (const [i,l] of cumLength.entries()) {
+    if (tail < l) {
+      start = i-1; // Node that comes before tail
+      for (const [j,l] of cumLength.slice(i).entries()) {
+        if (head <= l) {
+          end = i+j; // Node that comes after head
+          break;
+        }
+      }
+      break;
+    }
+  }
+
+  // Construct the raylet path
+  const rayletPath = raylet.ray.path.slice(start,end+1);
+
+  // Replace head and tail with their interpolated coordinates
+  rayletPath[rayletPath.length-1] = Vector.lerp(raylet.ray.path[end-1],raylet.ray.path[end],(head-cumLength[end-1])/(cumLength[end]-cumLength[end-1]));
+  rayletPath[0] = Vector.lerp(raylet.ray.path[start],raylet.ray.path[start+1],(tail-cumLength[start])/(cumLength[start+1]-cumLength[start]));
+
+  return rayletPath;
+}
+
 // Function to draw rays and antenna on the canvas
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -95,7 +161,7 @@ function draw() {
   ctx.fill();
 
   // Draw obstacles
-  ctx.strokeStyle = 'red';
+  ctx.strokeStyle = 'black';
   obstacles.forEach((obstacle) => {
     ctx.beginPath();
     ctx.moveTo(obstacle.p1.x, obstacle.p1.y);
@@ -104,27 +170,27 @@ function draw() {
   });
 
   // Draw rays
-  ctx.strokeStyle = 'black';
+  ctx.strokeStyle = 'lightgray';
   rays.forEach((ray) => {
     if (!ray.reachedAntenna) {
-      ctx.beginPath();
-      ray.path.forEach((point, index) => {
-        if (index === 0) {
-          ctx.moveTo(point.x, point.y);
-        } else {
-          ctx.lineTo(point.x, point.y);
-        }
-      });
-      ctx.stroke();
+      drawPath(ray.path);
     }
+  });
+
+  // Draw raylets
+  ctx.strokeStyle = 'red';
+  raylets.forEach((raylet) => {
+    drawPath(rayletToPath(raylet));
   });
 }
 
 // Animation loop
 function animate() {
-  if (!isPaused) { 
+  if (!isPaused) {
     requestAnimationFrame(animate);
+    updateRaylets();
     draw();
+    time++;
   }
 }
 
