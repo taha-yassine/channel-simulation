@@ -1,12 +1,9 @@
-import { getReflection, argmin } from './utils.js';
+import { getReflection, getIntersection, getImage, argmin } from './utils.js';
 import { Vector } from './vector.js';
 
-// Components
-const speedSlider = document.getElementById('speed');
-const bouncesSlider = document.getElementById('bounces');
-const timeSlider = document.getElementById('time');
-
+/////////////
 // Init
+/////////////
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const rays = [];
@@ -26,14 +23,22 @@ const obstacles = [
 // Antenna config
 const antenna = {
   p: new Vector(canvas.width - 50, canvas.height / 2),
-  radius: 10
+  radius: 5
 };
 
+// Components
+const speedSlider = document.getElementById('speed');
+const bouncesSlider = document.getElementById('bounces');
+const timeSlider = document.getElementById('time');
+
+/////////////////////////
 // Event listeners
+/////////////////////////
 canvas.addEventListener('mousedown', (event) => {
   if (!isPaused) {
     const { offsetX, offsetY } = event;
-    shootRays(offsetX, offsetY);
+    currentOrigin = new Vector(offsetX, offsetY);
+    shootRays(currentOrigin);
     timeSlider.value = 0;
   }
 });
@@ -55,45 +60,49 @@ document.getElementById('resetButton').addEventListener('click', () => {
 });
 bouncesSlider.addEventListener('input', () => {
   if(currentOrigin) {
-    shootRays(currentOrigin.x, currentOrigin.y);
+    shootRays(currentOrigin);
+    timeSlider.value = 0;
   }
 });
 
 // Function to shoot rays in all directions from the clicked point
-function shootRays(originX, originY) {
-  // Register origin
-  currentOrigin = new Vector(originX, originY);
-
-  timeSlider.value = 0;
-
+function shootRays(origin, method='sbr') {
   // Clear previous rays
   rays.length = 0;
   raylets.length = 0;
 
-  for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 90) {
-    const direction = new Vector(Math.cos(angle), Math.sin(angle)); // Translate angle to unit direction vector
-    const ray = {
-      path: [new Vector(originX, originY)],
-      reachedAntenna: false,
-      maxBounces: bouncesSlider.value,
-      reachedMaxLength: false,
-    };
-    tracePath(ray.path, direction, obstacles, ray.maxBounces);
-    rays.push(ray);
+  if (method === 'sbr') {
+    for (let angle = 0; angle < 2 * Math.PI; angle += Math.PI / 90) {
+      const direction = new Vector(Math.cos(angle), Math.sin(angle)); // Translate angle to unit direction vector
+      const ray = {
+        path: [origin],
+        reachedMaxLength: false,
+      };
+      tracePathSBR(ray.path, direction, obstacles, bouncesSlider.value);
+      rays.push(ray);
+    }
+  }
+  else if (method === 'image-source') {
+    tracePathImageSource({p:origin}, antenna.p, obstacles, bouncesSlider.value);
+  }
 
-    // Initialize a raylet for each ray
+  // Initialize a raylet for each ray
+  rays.forEach((ray) => {
     raylets.push({
       head : 0, // Head of the raylet as the absolute distance from the origin of the ray
       ray: ray, // Corresponding ray
     });
-  }
+  });
 }
 
-// Recursive function to do the ray tracing
+////////////
+// SBR method
+////////////
+
+// Recursive function to do the SBR
 // TODO: Handle corners
-function tracePath(path, direction, obstacles, bounces) {
-  bounces--;
-  if (bounces >= -1) {
+function tracePathSBR(path, direction, obstacles, bounces) {
+  if (bounces >= 0) {
     let intersections = [];
     let refDirs = [];
     const raySegment = {
@@ -102,31 +111,74 @@ function tracePath(path, direction, obstacles, bounces) {
     };
     obstacles.forEach((obstacle) => {
       const [i, refDir] = getReflection(raySegment, obstacle);
-      intersections.push(i);
-      refDirs.push(refDir);
+      if (i) {
+        intersections.push(i);
+        refDirs.push(refDir);
+      }
     });
     const idMin = argmin(intersections.map(i => i!=null ? Vector.distanceBetween(i, raySegment.p1) : Infinity));
     path.push(intersections[idMin]);
-    tracePath(path, refDirs[idMin], obstacles, bounces);
+    tracePathSBR(path, refDirs[idMin], obstacles, bounces-1);
   }
 }
 
+////////////////////////
+// Image-source method
+////////////////////////
+
+// Recursive function to trace the rays using the image-source method
+function tracePathImageSource(source, receiver, obstacles, bounces) {
+  if (bounces >= 0) {
+    const ray = {
+      path: constructPath(source, receiver, [receiver], obstacles),
+    };
+    if (ray.path) { rays.push(ray); }
+
+    for (const obstacle of obstacles) {
+      const image = getImage(source, obstacle);
+      tracePathImageSource(image, receiver, obstacles, bounces-1);
+    }
+  }
+}
+
+// Recursive function to construct the path given an image
+function constructPath(image, destination, path, obstacles) {
+  const raySegment = {
+    p1: image.p,
+    p2: destination.add(image.p.subtract(destination).normalize().multiply(.01)), // Slightly offset the ray to avoid self-intersections
+  };
+
+  // Check if ray segment is obstructed
+  const intersections = [];
+  for (const obstacle of obstacles) {
+    const intersection = getIntersection(raySegment, obstacle, true);
+    intersections.push(intersection);
+  }
+  const idMin = argmin(intersections.map(i => i!=null ? Vector.distanceBetween(i, destination) : Infinity));
+  
+  const numIntersections = intersections.reduce((acc, i) => acc + (i!=null? 1 : 0), 0);
+  if (numIntersections == 0) {
+    if (!image.source) {
+      // Ray section from original transmitter to current destination is unobstructed and valid
+      path.unshift(image.p);
+      return path;
+    }
+    else { return null; }
+  }
+  else if (obstacles[idMin] === image.obstacle) {
+    path.unshift(intersections[idMin]);
+    return constructPath(image.source, intersections[idMin], path, obstacles);
+  }
+  else { return null; }
+}
+
+///////////////////
+// Raylets
+///////////////////
 function updateRaylets() {
   raylets.forEach((raylet) => {
     raylet.head = speedSlider.value*timeSlider.value;
   });
-}
-
-function drawPath(path) {
-  ctx.beginPath();
-  path.forEach((point, index) => {
-    if (index === 0) {
-      ctx.moveTo(point.x, point.y);
-    } else {
-      ctx.lineTo(point.x, point.y);
-    }
-  });
-  ctx.stroke();
 }
 
 // Function to draw raylet
@@ -163,16 +215,28 @@ function rayletToPath(raylet, length=10) {
   return rayletPath;
 }
 
-// Function to draw rays and antenna on the canvas
+//////////////////
+// Drawing
+//////////////////
+function drawPath(path) {
+  ctx.beginPath();
+  path.forEach((point, index) => {
+    if (index === 0) {
+      ctx.moveTo(point.x, point.y);
+    } else {
+      ctx.lineTo(point.x, point.y);
+    }
+  });
+  ctx.stroke();
+}
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // Draw rays
   ctx.strokeStyle = 'lightgray';
   rays.forEach((ray) => {
-    if (!ray.reachedAntenna) {
       drawPath(ray.path);
-    }
   });
   
   // Draw antenna
