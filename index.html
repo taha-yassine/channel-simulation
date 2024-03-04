@@ -3,15 +3,32 @@
 <head>
   <title>2D Ray Simulation</title>
   <style>
-    canvas {
+    .container {
+      display: flex;
+    }
+    .container > canvas {
       border: 1px solid black;
       display: block;
       margin-bottom: 10px;
     }
+    #canvas {
+      margin-right: 20px; 
+      width: 800px;
+      height: 600px;
+    }
+
+    #plot {
+      flex: .5;
+      height: 200px;
+      width: 300px;
+    }
   </style>
 </head>
 <body>
-  <canvas id="canvas" width="800" height="600"></canvas>
+  <div class="container">
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <canvas id="plot" height="200" width="300"></canvas>
+  </div>
   <button id="pauseButton">Pause</button>
   <button id="resetButton">Reset</button>
   <label for="speed">Speed:</label>
@@ -22,7 +39,7 @@
 
   <label for="time">Time:</label>
   <input type="range" id="time" min="0" max="500" value="0">
-
+  
   <script src="script.js" type="module"></script>
 </body>
 </html>

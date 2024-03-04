@@ -6,6 +6,8 @@ import { Vector } from './vector.js';
 /////////////
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+const plot = document.getElementById('plot');
+const plotCtx = plot.getContext('2d');
 const rays = [];
 const raylets = [];
 let isPaused = false;
@@ -66,7 +68,7 @@ bouncesSlider.addEventListener('input', () => {
 });
 
 // Function to shoot rays in all directions from the clicked point
-function shootRays(origin, method='sbr') {
+function shootRays(origin, method='image-source') {
   // Clear previous rays
   rays.length = 0;
   raylets.length = 0;
@@ -84,6 +86,11 @@ function shootRays(origin, method='sbr') {
   }
   else if (method === 'image-source') {
     tracePathImageSource({p:origin}, antenna.p, obstacles, bouncesSlider.value);
+  }
+
+  // Compute cumulative length of each ray
+  for (const ray of rays) {
+    ray.cumLength = ray.path.map((acc => (p,i) => acc += Vector.distanceBetween(ray.path[Math.max(i-1,0)],p))(0));
   }
 
   // Initialize a raylet for each ray
@@ -184,7 +191,7 @@ function updateRaylets() {
 // Function to draw raylet
 function rayletToPath(raylet, length=10) {
   // Cumulative length of the path segments
-  const cumLength = raylet.ray.path.map((acc => (p,i) => acc += Vector.distanceBetween(raylet.ray.path[Math.max(i-1,0)],p))(0));
+  const cumLength = raylet.ray.cumLength;
   
   let head = Math.min(cumLength[cumLength.length-1], raylet.head); // Bound the head
   let tail = Math.max(head - length,0);
@@ -232,6 +239,7 @@ function drawPath(path) {
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  plotCtx.clearRect(0, 0, plot.width, plot.height);
 
   // Draw rays
   ctx.strokeStyle = 'lightgray';
@@ -259,6 +267,23 @@ function draw() {
   raylets.forEach((raylet) => {
     drawPath(rayletToPath(raylet));
   });
+
+  // Draw CIR plot
+  // TODO: Improve path loss computation
+  plotCtx.strokeStyle = 'black';
+  for (const raylet of raylets) {
+    const pathLength = raylet.ray.cumLength[raylet.ray.cumLength.length-1];
+    if (raylet.head>pathLength) {
+      const delay = pathLength/(speedSlider.value);
+      const amplitude = 100/pathLength;
+      const x = delay/(timeSlider.max)*plot.width;
+      const y = (1-amplitude)*plot.height;
+      plotCtx.beginPath();
+      plotCtx.moveTo(x, plot.height);
+      plotCtx.lineTo(x, y);
+      plotCtx.stroke();
+    }
+  }
 }
 
 // Animation loop
