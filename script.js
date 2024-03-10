@@ -21,6 +21,26 @@ const obstacles = [
   { p1: new Vector(300, 500), p2: new Vector(700, 400) },
   { p1: new Vector(500, 100), p2: new Vector(700, 150) },
 ];
+const movingObstacles = [
+  // Horizontal car
+  { initP1: new Vector(200, 250), initP2: new Vector(200, 280), direction: new Vector(1,0), speed:1 },
+  { initP1: new Vector(200, 280), initP2: new Vector(250, 280), direction: new Vector(1,0), speed:1 },
+  { initP1: new Vector(250, 280), initP2: new Vector(250, 250), direction: new Vector(1,0), speed:1 },
+  { initP1: new Vector(250, 250), initP2: new Vector(200, 250), direction: new Vector(1,0), speed:1 },
+
+  // Vertical car
+  { initP1: new Vector(200, 300), initP2: new Vector(200, 350), direction: new Vector(0,1), speed:.4 },
+  { initP1: new Vector(200, 350), initP2: new Vector(230, 350), direction: new Vector(0,1), speed:.4 },
+  { initP1: new Vector(230, 350), initP2: new Vector(230, 300), direction: new Vector(0,1), speed:.4 },
+  { initP1: new Vector(230, 300), initP2: new Vector(200, 300), direction: new Vector(0,1), speed:.4 },
+]
+// Initialize the moving obstacles
+for (const obstacle of movingObstacles) {
+  obstacle.p1 = obstacle.initP1;
+  obstacle.p2 = obstacle.initP2;
+}
+obstacles.push(...movingObstacles);
+
 
 // Antenna config
 const antenna = {
@@ -31,6 +51,7 @@ const antenna = {
 // Components
 const speedSlider = document.getElementById('speed');
 const bouncesSlider = document.getElementById('bounces');
+const delaySlider = document.getElementById('delay');
 const timeSlider = document.getElementById('time');
 
 /////////////////////////
@@ -41,7 +62,7 @@ canvas.addEventListener('mousedown', (event) => {
     const { offsetX, offsetY } = event;
     currentOrigin = new Vector(offsetX, offsetY);
     shootRays(currentOrigin);
-    timeSlider.value = 0;
+    delaySlider.value = 0;
   }
 });
 document.getElementById('pauseButton').addEventListener('click', (e) => {
@@ -56,14 +77,23 @@ document.getElementById('pauseButton').addEventListener('click', (e) => {
 document.getElementById('resetButton').addEventListener('click', () => {
   rays.length = 0;
   raylets.length = 0;
-  timeSlider.value = 0;
+  delaySlider.value = 0;
   isPaused = false;
   document.getElementById('pauseButton').textContent = 'Pause';
 });
 bouncesSlider.addEventListener('input', () => {
   if(currentOrigin) {
     shootRays(currentOrigin);
-    timeSlider.value = 0;
+    delaySlider.value = 0;
+  }
+});
+timeSlider.addEventListener('input', () => {
+  for (const obstacle of movingObstacles) {
+    obstacle.p1 = obstacle.initP1.add(obstacle.direction.multiply(timeSlider.value*obstacle.speed));
+    obstacle.p2 = obstacle.initP2.add(obstacle.direction.multiply(timeSlider.value*obstacle.speed));
+  }
+  if(currentOrigin) {
+    shootRays(currentOrigin);
   }
 });
 
@@ -184,7 +214,7 @@ function constructPath(image, destination, path, obstacles) {
 ///////////////////
 function updateRaylets() {
   raylets.forEach((raylet) => {
-    raylet.head = speedSlider.value*timeSlider.value;
+    raylet.head = speedSlider.value*delaySlider.value;
   });
 }
 
@@ -276,7 +306,7 @@ function draw() {
     if (raylet.head>pathLength) {
       const delay = pathLength/(speedSlider.value);
       const amplitude = 100/pathLength;
-      const x = delay/(timeSlider.max)*plot.width;
+      const x = delay/(delaySlider.max)*plot.width;
       const y = (1-amplitude)*plot.height;
       plotCtx.beginPath();
       plotCtx.moveTo(x, plot.height);
@@ -292,7 +322,7 @@ function animate() {
   if (!isPaused) {
     updateRaylets();
     draw();
-    timeSlider.value++;
+    delaySlider.value++;
   }
 }
 
